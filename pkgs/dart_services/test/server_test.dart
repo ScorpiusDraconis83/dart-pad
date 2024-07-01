@@ -5,7 +5,7 @@
 import 'package:collection/collection.dart';
 import 'package:dart_services/server.dart';
 import 'package:dart_services/src/sdk.dart';
-import 'package:dart_services/src/shared/services.dart';
+import 'package:dartpad_shared/services.dart';
 import 'package:http/http.dart';
 import 'package:test/test.dart';
 
@@ -275,11 +275,7 @@ void main() {
 
       expect(
         result.dartdoc!.toLowerCase(),
-        anyOf(
-          // Support both pre and post Dart 3.3.0.
-          contains('prints a string representation'),
-          contains('prints an object to the console'),
-        ),
+        contains('prints an object to the console'),
       );
       expect(result.containingLibraryName, 'dart:core');
       expect(result.elementDescription, isNotNull);

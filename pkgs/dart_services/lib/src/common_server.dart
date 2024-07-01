@@ -6,6 +6,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dartpad_shared/model.dart' as api;
+import 'package:google_generative_ai/google_generative_ai.dart' as google_ai;
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -16,7 +19,6 @@ import 'compiling.dart';
 import 'project_templates.dart';
 import 'pub.dart';
 import 'sdk.dart';
-import 'shared/model.dart' as api;
 import 'shelf_cors.dart' as shelf_cors;
 import 'utils.dart';
 
@@ -200,6 +202,80 @@ class CommonServerApi {
     return ok(version().toJson());
   }
 
+  @Route.post('$apiPrefix/openInIDX')
+  Future<Response> openInIdx(Request request, String apiVersion) async {
+    final code = api.OpenInIdxRequest.fromJson(await request.readAsJson()).code;
+    final idxUrl = Uri.parse('https://idx.google.com/run.api');
+
+    final data = {
+      'project[files][lib/main.dart]': code,
+      'project[settings]': '{"baselineEnvironment": "flutter"}',
+    };
+    try {
+      final response = await http.post(
+        idxUrl,
+        body: data,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      );
+
+      if (response.statusCode == 302) {
+        return ok(api.OpenInIdxResponse(idxUrl: response.headers['location']!)
+            .toJson());
+      } else {
+        return Response.internalServerError(
+            body:
+                'Failed to read response from IDX server. Response: $response');
+      }
+    } catch (error) {
+      return Response.internalServerError(
+          body: 'Failed to read response from IDX server. Error: $error');
+    }
+  }
+
+  static final String? geminiApiKey = Platform.environment['GEMINI_API_KEY'];
+  http.Client? geminiHttpClient;
+
+  @Route.post('$apiPrefix/_gemini')
+  Future<Response> gemini(Request request, String apiVersion) async {
+    if (apiVersion != api3) return unhandledVersion(apiVersion);
+
+    // Read the api key from env variables (populated on the server).
+    final apiKey = geminiApiKey;
+    if (apiKey == null) {
+      return Response.internalServerError(
+          body: 'gemini key not configured on server');
+    }
+
+    // Only allow the call from dartpad.dev.
+    final origin = request.origin;
+    if (origin != 'https://dartpad.dev') {
+      return Response.badRequest(
+          body: 'Gemini calls only allowed from the DartPad front-end');
+    }
+
+    final sourceRequest =
+        api.SourceRequest.fromJson(await request.readAsJson());
+
+    geminiHttpClient ??= http.Client();
+
+    final model = google_ai.GenerativeModel(
+      model: 'models/gemini-1.5-flash-latest',
+      apiKey: apiKey,
+      httpClient: geminiHttpClient,
+    );
+
+    final result = await serialize(() async {
+      // call gemini
+      final result = await model.generateContent([
+        google_ai.Content.text(sourceRequest.source),
+      ]);
+
+      return api.GeminiResponse(response: result.text!);
+    });
+
+    return ok(result.toJson());
+  }
+
   Response ok(Map<String, dynamic> json) {
     return Response.ok(
       _jsonEncoder.convert(json),
@@ -326,4 +402,8 @@ String _formatMessage(
   }
 
   return message;
+}
+
+extension on Request {
+  String? get origin => headers['origin'];
 }

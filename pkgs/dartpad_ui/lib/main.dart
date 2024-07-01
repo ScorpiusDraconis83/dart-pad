@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart' show usePathUrlStrategy;
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:provider/provider.dart';
 import 'package:split_view/split_view.dart';
@@ -34,6 +35,10 @@ const smallScreenWidth = 720;
 
 void main() async {
   usePathUrlStrategy();
+
+  // Make sure that the google fonts don't load from http.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   runApp(const DartPadApp());
 }
 
@@ -275,9 +280,9 @@ class _DartPadMainPageState extends State<DartPadMainPage>
             fallbackSnippet: Samples.getDefault(type: 'dart'))
         .then((value) {
       // Start listening for inject code messages.
-      handleEmbedMessage(appModel);
+      handleEmbedMessage(appServices, runOnInject: widget.runOnLoad);
       if (widget.runOnLoad) {
-        _performCompileAndRun();
+        appServices.performCompileAndRun();
       }
     });
 
@@ -315,7 +320,7 @@ class _DartPadMainPageState extends State<DartPadMainPage>
       appModel: appModel,
       appServices: appServices,
       onFormat: _handleFormatting,
-      onCompileAndRun: _performCompileAndRun,
+      onCompileAndRun: appServices.performCompileAndRun,
       key: _editorKey,
     );
 
@@ -374,7 +379,7 @@ class _DartPadMainPageState extends State<DartPadMainPage>
                     SizedBox(
                       height: consoleHeight,
                       child: ConsoleWidget(
-                        textController: appModel.consoleOutputController,
+                        output: appModel.consoleOutput,
                         showDivider: mode == LayoutMode.both,
                         key: _consoleKey,
                       ),
@@ -460,10 +465,14 @@ class _DartPadMainPageState extends State<DartPadMainPage>
         child: CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             keys.runKeyActivator1: () {
-              if (!appModel.compilingBusy.value) _performCompileAndRun();
+              if (!appModel.compilingBusy.value) {
+                appServices.performCompileAndRun();
+              }
             },
             keys.runKeyActivator2: () {
-              if (!appModel.compilingBusy.value) _performCompileAndRun();
+              if (!appModel.compilingBusy.value) {
+                appServices.performCompileAndRun();
+              }
             },
             // keys.findKeyActivator: () {
             //   // TODO:
@@ -521,37 +530,6 @@ class _DartPadMainPageState extends State<DartPadMainPage>
       appModel.editorStatus.showToast('Error formatting code');
       appModel.appendLineToConsole('Formatting issue: $error');
       return;
-    }
-  }
-
-  Future<void> _performCompileAndRun() async {
-    final source = appModel.sourceCodeController.text;
-    final progress =
-        appModel.editorStatus.showMessage(initialText: 'Compiling…');
-
-    try {
-      final response =
-          await appServices.compileDDC(CompileRequest(source: source));
-      appModel.clearConsole();
-      appServices.executeJavaScript(
-        response.result,
-        modulesBaseUrl: response.modulesBaseUrl,
-        engineVersion: appModel.runtimeVersions.value?.engineVersion,
-        dartSource: source,
-      );
-    } catch (error) {
-      appModel.clearConsole();
-
-      appModel.editorStatus.showToast('Compilation failed');
-
-      if (error is ApiRequestError) {
-        appModel.appendLineToConsole(error.message);
-        appModel.appendLineToConsole(error.body);
-      } else {
-        appModel.appendLineToConsole('$error');
-      }
-    } finally {
-      progress.close();
     }
   }
 
@@ -698,19 +676,8 @@ class DartPadAppBar extends StatelessWidget implements PreferredSizeWidget {
         actions: [
           // Hide the Install SDK button when the screen width is too small.
           if (constraints.maxWidth > smallScreenWidth)
-            TextButton(
-              onPressed: () {
-                url_launcher.launchUrl(
-                  Uri.parse('https://docs.flutter.dev/get-started/install'),
-                );
-              },
-              child: const Row(
-                children: [
-                  Text('Install SDK'),
-                  SizedBox(width: denseSpacing),
-                  Icon(Icons.launch, size: 18),
-                ],
-              ),
+            ContinueInMenu(
+              openInIdx: _openInIDX,
             ),
           const SizedBox(width: denseSpacing),
           _BrightnessButton(
@@ -727,6 +694,13 @@ class DartPadAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => bottom == null
       ? const Size(double.infinity, 56.0)
       : const Size(double.infinity, 112.0);
+
+  Future<void> _openInIDX() async {
+    final code = appModel.sourceCodeController.text;
+    final request = OpenInIdxRequest(code: code);
+    final response = await appServices.services.openInIdx(request);
+    url_launcher.launchUrl(Uri.parse(response.idxUrl));
+  }
 }
 
 class EditorWithButtons extends StatelessWidget {
@@ -1105,20 +1079,12 @@ class OverflowMenu extends StatelessWidget {
 
   static const _menuItems = [
     (
-      label: 'dart.dev',
-      uri: 'https://dart.dev',
-    ),
-    (
-      label: 'flutter.dev',
-      uri: 'https://flutter.dev',
+      label: 'Install SDK',
+      uri: 'https://flutter.dev/get-started',
     ),
     (
       label: 'Sharing guide',
       uri: 'https://github.com/dart-lang/dart-pad/wiki/Sharing-Guide'
-    ),
-    (
-      label: 'DartPad on GitHub',
-      uri: 'https://github.com/dart-lang/dart-pad',
     ),
   ];
 
@@ -1149,6 +1115,38 @@ class OverflowMenu extends StatelessWidget {
 
   void _onSelected(BuildContext context, String uri) {
     url_launcher.launchUrl(Uri.parse(uri));
+  }
+}
+
+class ContinueInMenu extends StatelessWidget {
+  final VoidCallback openInIdx;
+  const ContinueInMenu({super.key, required this.openInIdx});
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      builder: (context, MenuController controller, Widget? child) {
+        return TextButton.icon(
+          onPressed: () => controller.toggleMenuState(),
+          icon: const Icon(Icons.file_download_outlined),
+          label: const Text('Open in'),
+        );
+      },
+      menuChildren: [
+        ...[
+          MenuItemButton(
+            trailingIcon: const Logo(type: 'idx'),
+            onPressed: () {
+              openInIdx();
+            },
+            child: const Padding(
+              padding: EdgeInsets.fromLTRB(0, 0, 32, 0),
+              child: Text('IDX'),
+            ),
+          ),
+        ].map((widget) => PointerInterceptor(child: widget))
+      ],
+    );
   }
 }
 

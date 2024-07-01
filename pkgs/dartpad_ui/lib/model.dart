@@ -48,7 +48,7 @@ class AppModel {
   final ValueNotifier<String> title = ValueNotifier('');
 
   final TextEditingController sourceCodeController = TextEditingController();
-  final TextEditingController consoleOutputController = TextEditingController();
+  final ValueNotifier<String> consoleOutput = ValueNotifier('');
 
   final ValueNotifier<bool> formattingBusy = ValueNotifier(false);
   final ValueNotifier<bool> compilingBusy = ValueNotifier(false);
@@ -76,7 +76,7 @@ class AppModel {
   late final StreamSubscription<SplitDragState> _splitSubscription;
 
   AppModel() {
-    consoleOutputController.addListener(_recalcLayout);
+    consoleOutput.addListener(_recalcLayout);
 
     _splitSubscription =
         splitDragStateManager.onSplitDragUpdated.listen((SplitDragState value) {
@@ -85,18 +85,18 @@ class AppModel {
   }
 
   void appendLineToConsole(String str) {
-    consoleOutputController.text += '$str\n';
+    consoleOutput.value += '$str\n';
   }
 
-  void clearConsole() => consoleOutputController.clear();
+  void clearConsole() => consoleOutput.value = '';
 
   void dispose() {
-    consoleOutputController.removeListener(_recalcLayout);
+    consoleOutput.removeListener(_recalcLayout);
     _splitSubscription.cancel();
   }
 
   void _recalcLayout() {
-    final hasConsoleText = consoleOutputController.text.isNotEmpty;
+    final hasConsoleText = consoleOutput.value.isNotEmpty;
     final isFlutter = _appIsFlutter;
     final usesPackageWeb = _usesPackageWeb;
 
@@ -182,7 +182,7 @@ class AppServices {
     appModel.sourceCodeController.text = source;
 
     // Reset the title.
-    appModel.title.value = generateSnippetName();
+    appModel.title.value = '';
 
     // Reset the console.
     appModel.clearConsole();
@@ -304,6 +304,36 @@ class AppServices {
     appModel.appReady.value = true;
   }
 
+  Future<void> performCompileAndRun() async {
+    final source = appModel.sourceCodeController.text;
+    final progress =
+        appModel.editorStatus.showMessage(initialText: 'Compiling…');
+
+    try {
+      final response = await _compileDDC(CompileRequest(source: source));
+      appModel.clearConsole();
+      _executeJavaScript(
+        response.result,
+        modulesBaseUrl: response.modulesBaseUrl,
+        engineVersion: appModel.runtimeVersions.value?.engineVersion,
+        dartSource: source,
+      );
+    } catch (error) {
+      appModel.clearConsole();
+
+      appModel.editorStatus.showToast('Compilation failed');
+
+      if (error is ApiRequestError) {
+        appModel.appendLineToConsole(error.message);
+        appModel.appendLineToConsole(error.body);
+      } else {
+        appModel.appendLineToConsole('$error');
+      }
+    } finally {
+      progress.close();
+    }
+  }
+
   Future<FormatResponse> format(SourceRequest request) async {
     try {
       appModel.formattingBusy.value = true;
@@ -317,6 +347,10 @@ class AppServices {
     return await services.document(request);
   }
 
+  Future<GeminiResponse> gemini(SourceRequest request) async {
+    return await services.gemini(request);
+  }
+
   Future<CompileResponse> compile(CompileRequest request) async {
     try {
       appModel.compilingBusy.value = true;
@@ -326,7 +360,7 @@ class AppServices {
     }
   }
 
-  Future<CompileDDCResponse> compileDDC(CompileRequest request) async {
+  Future<CompileDDCResponse> _compileDDC(CompileRequest request) async {
     try {
       appModel.compilingBusy.value = true;
       return await services.compileDDC(request);
@@ -354,7 +388,7 @@ class AppServices {
     _editorService = editorService;
   }
 
-  void executeJavaScript(
+  void _executeJavaScript(
     String javaScript, {
     required String dartSource,
     String? modulesBaseUrl,

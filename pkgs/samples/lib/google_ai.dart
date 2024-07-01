@@ -62,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
 class ApiKeyWidget extends StatelessWidget {
   ApiKeyWidget({required this.onSubmitted, super.key});
 
-  final ValueChanged onSubmitted;
+  final ValueChanged<String> onSubmitted;
   final TextEditingController _textController = TextEditingController();
 
   @override
@@ -256,7 +256,7 @@ class _ChatWidgetState extends State<ChatWidget> {
   }
 
   void _showError(String message) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -300,7 +300,7 @@ class MessageWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: isFromUser
                   ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceVariant,
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.symmetric(

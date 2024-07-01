@@ -145,7 +145,7 @@ const _flameGame = Sample(
 /// built using the Flame game engine for Flutter.
 ///
 /// To learn how to build a more complete version of this game yourself,
-/// check out the codelab at https://docs.flutter.dev/brick-breaker.
+/// check out the codelab at https://flutter.dev/to/brick-breaker.
 library;
 
 import 'dart:async';
@@ -538,7 +538,7 @@ class _ChatScreenState extends State<ChatScreen> {
 class ApiKeyWidget extends StatelessWidget {
   ApiKeyWidget({required this.onSubmitted, super.key});
 
-  final ValueChanged onSubmitted;
+  final ValueChanged<String> onSubmitted;
   final TextEditingController _textController = TextEditingController();
 
   @override
@@ -732,7 +732,7 @@ class _ChatWidgetState extends State<ChatWidget> {
   }
 
   void _showError(String message) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -776,7 +776,7 @@ class MessageWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: isFromUser
                   ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceVariant,
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.symmetric(
@@ -839,7 +839,7 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorSchemeSeed: Colors.blue,
       ),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );

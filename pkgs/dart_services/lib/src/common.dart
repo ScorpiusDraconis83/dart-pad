@@ -9,8 +9,19 @@ const kBootstrapDart = 'bootstrap.dart';
 const kBootstrapDartCode = r'''
 import 'main.dart' as user_code;
 
+import 'package:stack_trace/stack_trace.dart';
+
 void main() {
-  user_code.main();
+  Chain.capture(user_code.main, onError: (error, chain) {
+    print('DartPad caught unhandled ${error.runtimeType}:');
+    print('$error');
+    final simplifiedChain = chain
+        .toString()
+        .split('\n')
+        .takeWhile((line) => !line.endsWith(r'main$'))
+        .join('\n');
+    print('$simplifiedChain\nStack trace truncated and adjusted by DartPad...');
+  });
 }
 ''';
 
@@ -21,27 +32,17 @@ import 'dart:ui_web' as ui_web;
 
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
-import 'generated_plugin_registrant.dart';
+import 'generated_plugin_registrant.dart' as pluginRegistrant;
 import 'main.dart' as entrypoint;
 
 Future<void> main() async {
-  registerPlugins(webPluginRegistrar);
-  await ui_web.bootstrapEngine();
-  entrypoint.main();
-}
-''';
-
-const kBootstrapFlutterCode_3_16 = r'''
-import 'dart:ui' as ui;
-
-import 'package:flutter_web_plugins/flutter_web_plugins.dart';
-
-import 'generated_plugin_registrant.dart';
-import 'main.dart' as entrypoint;
-
-Future<void> main() async {
-  registerPlugins(webPluginRegistrar);
-  await ui.webOnlyInitializePlatform();
-  entrypoint.main();
+  await ui_web.bootstrapEngine(
+    runApp: () {
+      entrypoint.main();
+    },
+    registerPlugins: () {
+      pluginRegistrant.registerPlugins();
+    },
+  );
 }
 ''';

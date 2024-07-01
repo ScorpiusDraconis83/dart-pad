@@ -15,8 +15,8 @@ information, code formatting, and quick fixes for issues.
 
 ### Initialize Flutter
 
-The Flutter SDK needs to be downloaded and setup; see
-https://docs.flutter.dev/get-started/install.
+The Flutter SDK needs to be downloaded and setup; check out
+https://flutter.dev/get-started.
 
 ### Running
 
@@ -41,12 +41,6 @@ To rebuild the shelf router, run:
 
 ```
 dart run build_runner build --delete-conflicting-outputs
-```
-
-And to update the shared code from dartpad_shared, run:
-
-```
-dart tool/grind.dart copy-shared-source
 ```
 
 ### Modifying supported packages
